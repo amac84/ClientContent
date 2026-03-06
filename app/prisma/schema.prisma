@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Engagement {
+  id              String            @id @default(cuid())
+  orgId           String
+  createdByUserId String
+  clientName      String
+  objective       String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  planningArtifacts PlanningArtifact[]
+  researchBriefs  ResearchBrief[]
+  interviewSessions InterviewSession[]
+  extractionArtifacts ExtractionArtifact[]
+  outputDocuments OutputDocument[]
+}
+
+model PlanningArtifact {
+  id              String   @id @default(cuid())
+  engagementId    String
+  createdByUserId String
+  planJson        Json
+  chatNotes       String?
+  createdAt       DateTime @default(now())
+  engagement      Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId, createdAt])
+}
+
+model ResearchBrief {
+  id              String   @id @default(cuid())
+  engagementId    String
+  createdByUserId String
+  briefMarkdown   String
+  sourceNotesJson Json?
+  createdAt       DateTime @default(now())
+  engagement      Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId, createdAt])
+}
+
+model InterviewSession {
+  id                 String      @id @default(cuid())
+  engagementId       String
+  participantName    String
+  pinCode            String
+  pinHash            String      @unique
+  pinPreview         String
+  status             SessionStatus @default(PENDING)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  engagement         Engagement  @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  calls              InterviewCall[]
+  transcripts        Transcript[]
+  extractionArtifacts ExtractionArtifact[]
+
+  @@index([engagementId, createdAt])
+}
+
+model InterviewCall {
+  id                  String   @id @default(cuid())
+  sessionId           String
+  twilioCallSid       String?
+  fromNumber          String?
+  routingStatus       String
+  interviewerContextJson Json?
+  createdAt           DateTime @default(now())
+  session             InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model Transcript {
+  id                String   @id @default(cuid())
+  sessionId         String
+  webhookReceiptId  String?  @unique
+  externalEventId   String?
+  rawPayloadJson    Json
+  transcriptText    String
+  createdAt         DateTime @default(now())
+  session           InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  receipt           WebhookReceipt? @relation(fields: [webhookReceiptId], references: [id], onDelete: SetNull)
+  extractionArtifacts ExtractionArtifact[]
+
+  @@index([sessionId, createdAt])
+}
+
+model WebhookReceipt {
+  id            String   @id @default(cuid())
+  provider      String
+  eventKey      String
+  payloadHash   String
+  processedAt   DateTime @default(now())
+  transcript    Transcript?
+
+  @@unique([provider, eventKey])
+}
+
+model ExtractionArtifact {
+  id                          String   @id @default(cuid())
+  engagementId                String
+  sessionId                   String?
+  transcriptId                String?
+  taskInventoryJson           Json
+  systemsMapJson              Json
+  exceptionTaxonomyJson       Json
+  controlsMapJson             Json
+  invisibleWorkJson           Json
+  automationOpportunitiesJson Json
+  impactJson                  Json
+  createdAt                   DateTime @default(now())
+  engagement                  Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  session                     InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  transcript                  Transcript? @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
+
+  @@index([engagementId, createdAt])
+}
+
+model OutputDocument {
+  id             String   @id @default(cuid())
+  engagementId   String
+  type           OutputType
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  engagement     Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  versions       OutputVersion[]
+
+  @@unique([engagementId, type])
+}
+
+model OutputVersion {
+  id               String   @id @default(cuid())
+  outputDocumentId String
+  versionNumber    Int
+  markdown         String
+  status           OutputVersionStatus @default(DRAFT)
+  generatedFromJson Json?
+  createdByUserId  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  approvedAt       DateTime?
+  approvedByUserId String?
+  document         OutputDocument @relation(fields: [outputDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([outputDocumentId, versionNumber])
+  @@index([outputDocumentId, createdAt])
+}
+
+enum SessionStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+enum OutputType {
+  CLIENT_UPDATE
+  AUTOMATION_MEMO
+  TESTIMONIAL_DRAFT
+}
+
+enum OutputVersionStatus {
+  DRAFT
+  APPROVED
+}
