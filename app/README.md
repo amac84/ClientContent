@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Treewalk Engagement Workflow App
 
-## Getting Started
+This app implements the engagement process flow:
 
-First, run the development server:
+1. Clerk Microsoft login + protected routes
+2. Engagement creation
+3. Planning artifact persistence
+4. Research brief persistence
+5. Interview session creation + unique PIN generation
+6. Twilio PIN validation and deterministic session routing
+7. ElevenLabs transcript webhook ingest + idempotency
+8. Transcript-triggered extraction into structured facts
+9. Extraction-triggered output draft generation
+10. Output review/edit/version/approve in UI
+
+## Tech stack
+
+- Next.js App Router + TypeScript
+- Clerk auth
+- Prisma + SQLite
+- Twilio Voice TwiML endpoints
+- ElevenLabs webhook adapter
+- Vitest for focused unit/integration tests
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment file:
+
+```bash
+cp .env.example .env
+```
+
+3. Run migrations:
+
+```bash
+npx prisma migrate dev
+```
+
+4. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Running tests
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test
+npm run lint
+npm run build
+```
 
-## Learn More
+## API endpoints
 
-To learn more about Next.js, take a look at the following resources:
+### Twilio voice
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `POST /api/twilio/voice`
+  - Returns TwiML prompt asking for 6-digit PIN.
+- `POST /api/twilio/voice/validate-pin`
+  - Validates PIN hash lookup and stores interview call routing context.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### ElevenLabs transcript webhook
 
-## Deploy on Vercel
+- `POST /api/webhooks/elevenlabs`
+  - Expected payload shape:
+    ```json
+    {
+      "event_id": "evt_001",
+      "type": "conversation.completed",
+      "data": {
+        "session_id": "session_cuid",
+        "pin": "123456",
+        "transcript": "..."
+      }
+    }
+    ```
+  - Uses `event_id` (or fallback key) for idempotency.
+  - Duplicate webhook retries return `duplicate_ignored`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Rerun pipeline endpoints
+
+- `POST /api/engagements/:engagementId/rerun-extraction`
+- `POST /api/engagements/:engagementId/rerun-outputs`
+
+Both require authenticated actor access to the engagement org scope.
+
+## Explicit behavior policies
+
+- **PIN routing:** only validated PIN hash maps to session (no phone-number guessing).
+- **Webhook idempotency:** unique receipt key by provider+eventKey prevents duplicates.
+- **Partial completion:** outputs regenerate after each transcript arrival using all currently available extraction artifacts.
+- **Separation of concerns:** transcript storage, extraction artifacts, and output generation are separate persisted layers so pipeline can be rerun safely.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
