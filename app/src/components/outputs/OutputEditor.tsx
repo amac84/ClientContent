@@ -55,6 +55,15 @@ export function OutputEditor({
           {version.approvedAt?.toISOString() ?? "n/a"}.
         </p>
       )}
+
+      <details className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+        <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-slate-600">
+          Generated-from metadata
+        </summary>
+        <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-700">
+          {JSON.stringify(version.generatedFromJson ?? {}, null, 2)}
+        </pre>
+      </details>
     </article>
   );
 }
