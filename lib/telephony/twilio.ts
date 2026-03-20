@@ -1,0 +1,5 @@
+import 'server-only';
+
+export function normalizePhoneNumber(phoneNumber: string) {
+  return phoneNumber.replace(/[^\d+]/g, '');
+}
